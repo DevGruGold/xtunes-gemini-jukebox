@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { RadioCard } from "@/components/RadioCard";
 import { NowPlaying } from "@/components/NowPlaying";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const RADIO_STATIONS = [
   {
@@ -33,6 +34,7 @@ const Index = () => {
   const [currentStation, setCurrentStation] = useState<typeof RADIO_STATIONS[0] | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audio] = useState(new Audio());
+  const isMobile = useIsMobile();
 
   const handleTogglePlay = (station: typeof RADIO_STATIONS[0]) => {
     if (currentStation?.id === station.id) {
@@ -55,10 +57,10 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/90 to-secondary/90">
-      <div className="container py-8">
-        <h1 className="text-4xl font-bold text-white mb-8">XTunes Radio</h1>
+      <div className="container px-4 py-8 mx-auto">
+        <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">XTunes Radio</h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
           {RADIO_STATIONS.map((station) => (
             <RadioCard
               key={station.id}

@@ -2,6 +2,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Languages } from "lucide-react";
 import { useState } from "react";
+import { translateText } from "@/utils/ai";
+import { useToast } from "@/hooks/use-toast";
 
 interface NowPlayingProps {
   station?: {
@@ -13,16 +15,39 @@ interface NowPlayingProps {
 
 export const NowPlaying = ({ station, lyrics }: NowPlayingProps) => {
   const [translatedLyrics, setTranslatedLyrics] = useState<string>("");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const { toast } = useToast();
 
   const translateLyrics = async () => {
-    // In a real app, we would call the Gemini API here
-    setTranslatedLyrics("Translated lyrics would appear here...");
+    if (!lyrics) return;
+    
+    setIsTranslating(true);
+    try {
+      // In a production environment, you would get this from Supabase secrets
+      const apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
+      
+      if (!apiKey) {
+        toast({
+          title: "API Key Required",
+          description: "Please set your Gemini API key in the settings.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const translated = await translateText(lyrics, apiKey);
+      if (translated) {
+        setTranslatedLyrics(translated);
+      }
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   if (!station) return null;
 
   return (
-    <Card className="backdrop-blur-sm bg-white/10 border-white/20 p-6">
+    <Card className="backdrop-blur-sm bg-white/10 border-white/20 p-6 w-full max-w-2xl mx-auto">
       <div className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-white">Now Playing</h2>
@@ -38,9 +63,10 @@ export const NowPlaying = ({ station, lyrics }: NowPlayingProps) => {
                 onClick={translateLyrics}
                 variant="outline"
                 className="bg-white/10 hover:bg-white/20"
+                disabled={isTranslating}
               >
                 <Languages className="w-4 h-4 mr-2" />
-                Translate
+                {isTranslating ? "Translating..." : "Translate"}
               </Button>
             </div>
             <p className="text-white/70 whitespace-pre-line">{lyrics}</p>
