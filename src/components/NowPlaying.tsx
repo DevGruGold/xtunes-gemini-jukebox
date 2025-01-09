@@ -23,19 +23,7 @@ export const NowPlaying = ({ station, lyrics }: NowPlayingProps) => {
     
     setIsTranslating(true);
     try {
-      // In a production environment, you would get this from Supabase secrets
-      const apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
-      
-      if (!apiKey) {
-        toast({
-          title: "API Key Required",
-          description: "Please set your Gemini API key in the settings.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const translated = await translateText(lyrics, apiKey);
+      const translated = await translateText(lyrics);
       if (translated) {
         setTranslatedLyrics(translated);
       }
