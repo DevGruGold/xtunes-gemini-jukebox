@@ -4,6 +4,7 @@ import { Languages } from "lucide-react";
 import { useState, useEffect } from "react";
 import { translateText } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 interface NowPlayingProps {
   station?: {
@@ -12,10 +13,17 @@ interface NowPlayingProps {
   };
 }
 
+interface Translation {
+  original: string;
+  translated: string;
+  timestamp: Date;
+}
+
 export const NowPlaying = ({ station }: NowPlayingProps) => {
-  const [translatedLyrics, setTranslatedLyrics] = useState<string>("");
+  const [translations, setTranslations] = useState<Translation[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [currentLyrics, setCurrentLyrics] = useState<string>("");
+  const [customText, setCustomText] = useState<string>("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -23,7 +31,6 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
       if (!station) return;
       
       try {
-        // For demonstration, we'll use some sample lyrics based on the genre
         const genreLyrics: { [key: string]: string } = {
           Jazz: "Smooth jazz playing softly\nMelodies floating through the air\nSaxophone whispers gently\nTaking away all my cares",
           Classical: "Symphony in motion\nOrchestra plays tonight\nStrings and brass in harmony\nCreating pure delight",
@@ -48,18 +55,35 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
     fetchLyrics();
   }, [station, toast]);
 
-  const translateLyrics = async () => {
-    if (!currentLyrics) return;
+  const translateText = async (text: string) => {
+    if (!text) return;
     
     setIsTranslating(true);
     try {
-      const translated = await translateText(currentLyrics);
+      const translated = await translateText(text);
       if (translated) {
-        setTranslatedLyrics(translated);
+        const newTranslation: Translation = {
+          original: text,
+          translated,
+          timestamp: new Date(),
+        };
+        setTranslations(prev => [...prev, newTranslation]);
       }
+    } catch (error) {
+      toast({
+        title: "Translation Error",
+        description: "Failed to translate the text. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsTranslating(false);
     }
+  };
+
+  const handleTranslateLyrics = () => translateText(currentLyrics);
+  const handleTranslateCustom = () => {
+    translateText(customText);
+    setCustomText("");
   };
 
   if (!station) return null;
@@ -78,22 +102,54 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-white">Lyrics</h3>
               <Button
-                onClick={translateLyrics}
+                onClick={handleTranslateLyrics}
                 variant="outline"
                 className="bg-white/10 hover:bg-white/20"
                 disabled={isTranslating}
               >
                 <Languages className="w-4 h-4 mr-2" />
-                {isTranslating ? "Translating..." : "Translate"}
+                {isTranslating ? "Translating..." : "Translate Lyrics"}
               </Button>
             </div>
             <p className="text-white/70 whitespace-pre-line">{currentLyrics}</p>
-            {translatedLyrics && (
-              <div className="mt-4">
-                <h4 className="text-md font-semibold text-white mb-2">Translation</h4>
-                <p className="text-white/70 whitespace-pre-line">{translatedLyrics}</p>
-              </div>
-            )}
+          </div>
+        )}
+
+        <div className="space-y-2 mt-4">
+          <h3 className="text-lg font-semibold text-white">Conversation</h3>
+          <div className="flex gap-2">
+            <Textarea
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              placeholder="Type anything to translate..."
+              className="bg-white/10 border-white/20 text-white"
+            />
+            <Button
+              onClick={handleTranslateCustom}
+              variant="outline"
+              className="bg-white/10 hover:bg-white/20"
+              disabled={isTranslating || !customText}
+            >
+              <Languages className="w-4 h-4 mr-2" />
+              Translate
+            </Button>
+          </div>
+        </div>
+
+        {translations.length > 0 && (
+          <div className="space-y-4 mt-4">
+            <h3 className="text-lg font-semibold text-white">Translation History</h3>
+            <div className="space-y-4">
+              {translations.map((t, i) => (
+                <div key={i} className="bg-white/5 p-4 rounded-lg space-y-2">
+                  <p className="text-white/70">{t.original}</p>
+                  <p className="text-white font-medium">{t.translated}</p>
+                  <p className="text-xs text-white/50">
+                    {t.timestamp.toLocaleTimeString()}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
