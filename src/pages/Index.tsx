@@ -98,10 +98,7 @@ const Index = () => {
         </div>
 
         {currentStation && (
-          <NowPlaying
-            station={currentStation}
-            lyrics="Sample lyrics would appear here..."
-          />
+          <NowPlaying station={currentStation} />
         )}
       </div>
     </div>
