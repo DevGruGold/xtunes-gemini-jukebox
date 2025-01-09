@@ -8,26 +8,50 @@ const RADIO_STATIONS = [
     id: 1,
     title: "Smooth Jazz",
     category: "Jazz",
-    streamUrl: "https://streaming.radio.co/s774887f7b/listen",
+    streamUrl: "https://strm112.1.fm/smoothjazz_mobile_mp3",
   },
   {
     id: 2,
     title: "Classical Harmony",
     category: "Classical",
-    streamUrl: "https://streaming.radio.co/s774887f7b/listen",
+    streamUrl: "https://strm112.1.fm/classical_mobile_mp3",
   },
   {
     id: 3,
     title: "Rock Legends",
     category: "Rock",
-    streamUrl: "https://streaming.radio.co/s774887f7b/listen",
+    streamUrl: "https://strm112.1.fm/rock_mobile_mp3",
   },
   {
     id: 4,
     title: "Electronic Beats",
     category: "Electronic",
-    streamUrl: "https://streaming.radio.co/s774887f7b/listen",
+    streamUrl: "https://strm112.1.fm/electronica_mobile_mp3",
   },
+  {
+    id: 5,
+    title: "Reggae Vibes",
+    category: "Reggae",
+    streamUrl: "https://strm112.1.fm/reggae_mobile_mp3",
+  },
+  {
+    id: 6,
+    title: "Pop Hits",
+    category: "Pop",
+    streamUrl: "https://strm112.1.fm/top40_mobile_mp3",
+  },
+  {
+    id: 7,
+    title: "90s Hip-Hop",
+    category: "Hip-Hop",
+    streamUrl: "https://strm112.1.fm/oldschool_mobile_mp3",
+  },
+  {
+    id: 8,
+    title: "Alternative Rock",
+    category: "Rock",
+    streamUrl: "https://strm112.1.fm/alternative_mobile_mp3",
+  }
 ];
 
 const Index = () => {
