@@ -34,11 +34,11 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
         const genreLyrics: { [key: string]: string } = {
           Jazz: "Smooth jazz playing softly\nMelodies floating through the air\nSaxophone whispers gently\nTaking away all my cares",
           Classical: "Symphony in motion\nOrchestra plays tonight\nStrings and brass in harmony\nCreating pure delight",
-          Rock: "Electric guitar screaming\nDrums beating like thunder\nRock and roll forever\nTearing the night asunder",
           Electronic: "Digital waves surround us\nSynthesizers set the mood\nElectronic beats pulsing\nTechnology and groove",
           Reggae: "Island rhythms flowing\nSunset on the beach\nReggae music playing\nParadise within reach",
           Pop: "Dancing to the rhythm\nCatchy melodies in my head\nPop music got me moving\nFollowing where the beat led",
-          "Hip-Hop": "Old school beats dropping\nNineties flow is smooth like wine\nGolden age of hip-hop\nRhymes that stand the test of time",
+          "Hip-Hop": "Modern beats dropping\nTwo thousands flow is tight\nUrban sounds are popping\nKeeping it real tonight",
+          Country: "Guitar strings are strumming\nTales of love and life\nCountry music humming\nCutting like a knife",
         };
 
         const lyrics = genreLyrics[station.category] || "Music playing...";

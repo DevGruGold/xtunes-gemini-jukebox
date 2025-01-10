@@ -17,12 +17,6 @@ const RADIO_STATIONS = [
     streamUrl: "https://strm112.1.fm/classical_mobile_mp3",
   },
   {
-    id: 3,
-    title: "Rock Legends",
-    category: "Rock",
-    streamUrl: "https://strm112.1.fm/rock_mobile_mp3",
-  },
-  {
     id: 4,
     title: "Electronic Beats",
     category: "Electronic",
@@ -41,16 +35,22 @@ const RADIO_STATIONS = [
     streamUrl: "https://strm112.1.fm/top40_mobile_mp3",
   },
   {
-    id: 7,
-    title: "90s Hip-Hop",
-    category: "Hip-Hop",
-    streamUrl: "https://strm112.1.fm/oldschool_mobile_mp3",
+    id: 9,
+    title: "Club Mix",
+    category: "Electronic",
+    streamUrl: "https://strm112.1.fm/club_mobile_mp3",
   },
   {
-    id: 8,
-    title: "Alternative Rock",
-    category: "Rock",
-    streamUrl: "https://strm112.1.fm/alternative_mobile_mp3",
+    id: 10,
+    title: "2000s Hip-Hop",
+    category: "Hip-Hop",
+    streamUrl: "https://strm112.1.fm/urban_mobile_mp3",
+  },
+  {
+    id: 11,
+    title: "New Country",
+    category: "Country",
+    streamUrl: "https://strm112.1.fm/country_mobile_mp3",
   }
 ];
 
