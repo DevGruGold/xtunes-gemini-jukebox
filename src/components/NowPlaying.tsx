@@ -1,16 +1,17 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Languages } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Languages, Mic, MicOff } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { translateText as translate } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
-import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
 interface NowPlayingProps {
   station?: {
     title: string;
     category: string;
   };
+  audio?: HTMLAudioElement;
 }
 
 interface Translation {
@@ -63,12 +64,60 @@ const getBackgroundStyle = (category: string): { backgroundImage: string, overla
   };
 };
 
-export const NowPlaying = ({ station }: NowPlayingProps) => {
+export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [customText, setCustomText] = useState<string>("");
+  const [isListening, setIsListening] = useState(false);
+  const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
   const background = station ? getBackgroundStyle(station.category) : null;
+  const originalVolume = useRef(audio?.volume || 1);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({
+        title: "Speech Recognition Unavailable",
+        description: "Your browser doesn't support speech recognition.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US'; // Set default language
+
+    recognitionRef.current.onresult = async (event: any) => {
+      const last = event.results.length - 1;
+      const text = event.results[last][0].transcript;
+      
+      if (event.results[last].isFinal && autoTranslateEnabled) {
+        // Only translate if the detected language is different from the user's language
+        if (event.results[last][0].confidence > 0.5) {
+          handleTranslation(text);
+        }
+      }
+    };
+
+    recognitionRef.current.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      toast({
+        title: "Speech Recognition Error",
+        description: event.error,
+        variant: "destructive",
+      });
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   const handleTranslation = async (text: string) => {
     if (!text) return;
@@ -95,9 +144,32 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
     }
   };
 
-  const handleTranslateCustom = () => {
-    handleTranslation(customText);
-    setCustomText("");
+  const toggleListening = async () => {
+    if (!recognitionRef.current) return;
+
+    if (!isListening) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        recognitionRef.current.start();
+        setIsListening(true);
+        if (audio) {
+          originalVolume.current = audio.volume;
+          audio.volume = 0.2; // Reduce volume during translation
+        }
+      } catch (error) {
+        toast({
+          title: "Microphone Access Denied",
+          description: "Please allow microphone access to use speech recognition.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      if (audio) {
+        audio.volume = originalVolume.current; // Restore original volume
+      }
+    }
   };
 
   if (!station) return null;
@@ -120,23 +192,24 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
         </div>
 
         <div className="space-y-2 mt-4">
-          <h3 className="text-lg font-semibold text-white">Conversation</h3>
-          <div className="flex gap-2">
-            <Textarea
-              value={customText}
-              onChange={(e) => setCustomText(e.target.value)}
-              placeholder="Type anything to translate..."
-              className="bg-white/10 border-white/20 text-white"
-            />
-            <Button
-              onClick={handleTranslateCustom}
-              variant="outline"
-              className="bg-white/10 hover:bg-white/20"
-              disabled={isTranslating || !customText}
-            >
-              <Languages className="w-4 h-4 mr-2" />
-              Translate
-            </Button>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Live Translation</h3>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-white">Auto-translate</span>
+                <Switch
+                  checked={autoTranslateEnabled}
+                  onCheckedChange={setAutoTranslateEnabled}
+                />
+              </div>
+              <Button
+                onClick={toggleListening}
+                variant="outline"
+                className={`bg-white/10 hover:bg-white/20 ${isListening ? 'text-red-400' : 'text-white'}`}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
         </div>
 

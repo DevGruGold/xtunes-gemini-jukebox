@@ -92,7 +92,7 @@ const Index = () => {
         </div>
 
         {currentStation && (
-          <NowPlaying station={currentStation} />
+          <NowPlaying station={currentStation} audio={audio} />
         )}
       </div>
     </div>
