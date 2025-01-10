@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Languages } from "lucide-react";
 import { useState, useEffect } from "react";
-import { translateText } from "@/utils/ai";
+import { translateText as translate } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -55,12 +55,12 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
     fetchLyrics();
   }, [station, toast]);
 
-  const translateText = async (text: string) => {
+  const handleTranslation = async (text: string) => {
     if (!text) return;
     
     setIsTranslating(true);
     try {
-      const translated = await translateText(text);
+      const translated = await translate(text);
       if (translated) {
         const newTranslation: Translation = {
           original: text,
@@ -80,9 +80,9 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
     }
   };
 
-  const handleTranslateLyrics = () => translateText(currentLyrics);
+  const handleTranslateLyrics = () => handleTranslation(currentLyrics);
   const handleTranslateCustom = () => {
-    translateText(customText);
+    handleTranslation(customText);
     setCustomText("");
   };
 
