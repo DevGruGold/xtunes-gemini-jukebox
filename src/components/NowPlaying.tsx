@@ -18,6 +18,7 @@ interface Translation {
   original: string;
   translated: string;
   timestamp: Date;
+  sourceLang?: string;
 }
 
 const getBackgroundStyle = (category: string): { backgroundImage: string, overlayColor: string } => {
@@ -69,6 +70,7 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
   const background = station ? getBackgroundStyle(station.category) : null;
@@ -88,17 +90,40 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US'; // Set default language
+    recognitionRef.current.lang = selectedLanguage;
 
     recognitionRef.current.onresult = async (event: any) => {
       const last = event.results.length - 1;
       const text = event.results[last][0].transcript;
       
-      if (event.results[last].isFinal && autoTranslateEnabled) {
-        // Only translate if the detected language is different from the user's language
-        if (event.results[last][0].confidence > 0.5) {
-          handleTranslation(text);
+      if (event.results[last].isFinal) {
+        const detectedLang = event.results[last].lang;
+        if (detectedLang !== selectedLanguage && event.results[last][0].confidence > 0.5) {
+          handleTranslation(text, detectedLang);
         }
+      }
+    };
+
+    recognitionRef.current.onstart = () => {
+      if (audio) {
+        originalVolume.current = audio.volume;
+        audio.volume = 0.2;
+      }
+      setIsListening(true);
+      toast({
+        title: "Translation Mode Active",
+        description: "Listening for speech to translate...",
+      });
+    };
+
+    recognitionRef.current.onend = () => {
+      if (audio) {
+        audio.volume = originalVolume.current;
+      }
+      if (autoTranslateEnabled) {
+        recognitionRef.current.start();
+      } else {
+        setIsListening(false);
       }
     };
 
@@ -117,9 +142,9 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
         recognitionRef.current.stop();
       }
     };
-  }, []);
+  }, [selectedLanguage]);
 
-  const handleTranslation = async (text: string) => {
+  const handleTranslation = async (text: string, sourceLang?: string) => {
     if (!text) return;
     
     setIsTranslating(true);
@@ -130,8 +155,9 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
           original: text,
           translated,
           timestamp: new Date(),
+          sourceLang
         };
-        setTranslations(prev => [...prev, newTranslation]);
+        setTranslations(prev => [newTranslation, ...prev].slice(0, 10)); // Keep last 10 translations
       }
     } catch (error) {
       toast({
@@ -151,24 +177,18 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
         recognitionRef.current.start();
-        setIsListening(true);
-        if (audio) {
-          originalVolume.current = audio.volume;
-          audio.volume = 0.2; // Reduce volume during translation
-        }
+        setAutoTranslateEnabled(true);
       } catch (error) {
         toast({
           title: "Microphone Access Denied",
-          description: "Please allow microphone access to use speech recognition.",
+          description: "Please allow microphone access to use translation.",
           variant: "destructive",
         });
       }
     } else {
       recognitionRef.current.stop();
+      setAutoTranslateEnabled(false);
       setIsListening(false);
-      if (audio) {
-        audio.volume = originalVolume.current; // Restore original volume
-      }
     }
   };
 
@@ -191,39 +211,35 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
           <p className="text-sm text-white/50">{station.category}</p>
         </div>
 
-        <div className="space-y-2 mt-4">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-white">Live Translation</h3>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-white">Auto-translate</span>
-                <Switch
-                  checked={autoTranslateEnabled}
-                  onCheckedChange={setAutoTranslateEnabled}
-                />
-              </div>
-              <Button
-                onClick={toggleListening}
-                variant="outline"
-                className={`bg-white/10 hover:bg-white/20 ${isListening ? 'text-red-400' : 'text-white'}`}
-              >
-                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </Button>
-            </div>
+            <Button
+              onClick={toggleListening}
+              variant="outline"
+              className={`bg-white/10 hover:bg-white/20 ${isListening ? 'text-red-400' : 'text-white'}`}
+            >
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </Button>
+          </div>
+          
+          <div className="text-sm text-white/70">
+            {isListening ? "Translation mode active" : "Click microphone to start translation"}
           </div>
         </div>
 
         {translations.length > 0 && (
-          <div className="space-y-4 mt-4">
-            <h3 className="text-lg font-semibold text-white">Translation History</h3>
-            <div className="space-y-4">
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Recent Translations</h3>
+            <div className="space-y-4 max-h-60 overflow-y-auto">
               {translations.map((t, i) => (
                 <div key={i} className="bg-white/5 p-4 rounded-lg space-y-2">
                   <p className="text-white/70">{t.original}</p>
                   <p className="text-white font-medium">{t.translated}</p>
-                  <p className="text-xs text-white/50">
-                    {t.timestamp.toLocaleTimeString()}
-                  </p>
+                  <div className="flex justify-between items-center text-xs text-white/50">
+                    <span>{t.timestamp.toLocaleTimeString()}</span>
+                    {t.sourceLang && <span>From: {t.sourceLang}</span>}
+                  </div>
                 </div>
               ))}
             </div>
