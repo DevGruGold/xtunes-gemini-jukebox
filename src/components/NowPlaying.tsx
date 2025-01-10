@@ -5,6 +5,13 @@ import { useState, useEffect, useRef } from "react";
 import { translateText as translate } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface NowPlayingProps {
   station?: {
@@ -20,6 +27,17 @@ interface Translation {
   timestamp: Date;
   sourceLang?: string;
 }
+
+const SUPPORTED_LANGUAGES = [
+  { code: 'en-US', name: 'English (US)' },
+  { code: 'es-ES', name: 'Spanish' },
+  { code: 'fr-FR', name: 'French' },
+  { code: 'de-DE', name: 'German' },
+  { code: 'it-IT', name: 'Italian' },
+  { code: 'ja-JP', name: 'Japanese' },
+  { code: 'ko-KR', name: 'Korean' },
+  { code: 'zh-CN', name: 'Chinese (Simplified)' },
+];
 
 const getBackgroundStyle = (category: string): { backgroundImage: string, overlayColor: string } => {
   const backgrounds = {
@@ -70,11 +88,16 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [userLanguage, setUserLanguage] = useState('en-US');
   const recognitionRef = useRef<any>(null);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
   const { toast } = useToast();
   const background = station ? getBackgroundStyle(station.category) : null;
   const originalVolume = useRef(audio?.volume || 1);
+
+  useEffect(() => {
+    synthRef.current = window.speechSynthesis;
+  }, []);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -90,15 +113,15 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = selectedLanguage;
+    recognitionRef.current.lang = userLanguage;
 
     recognitionRef.current.onresult = async (event: any) => {
       const last = event.results.length - 1;
       const text = event.results[last][0].transcript;
       
       if (event.results[last].isFinal) {
-        const detectedLang = event.results[last].lang;
-        if (detectedLang !== selectedLanguage && event.results[last][0].confidence > 0.5) {
+        const detectedLang = event.results[last][0].lang;
+        if (detectedLang !== userLanguage && event.results[last][0].confidence > 0.5) {
           handleTranslation(text, detectedLang);
         }
       }
@@ -112,7 +135,7 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
       setIsListening(true);
       toast({
         title: "Translation Mode Active",
-        description: "Listening for speech to translate...",
+        description: `Listening for non-${SUPPORTED_LANGUAGES.find(l => l.code === userLanguage)?.name} speech...`,
       });
     };
 
@@ -142,7 +165,22 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
         recognitionRef.current.stop();
       }
     };
-  }, [selectedLanguage]);
+  }, [userLanguage]);
+
+  const speakTranslation = (text: string) => {
+    if (!synthRef.current) return;
+    
+    // Stop any ongoing speech
+    synthRef.current.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = userLanguage;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    synthRef.current.speak(utterance);
+  };
 
   const handleTranslation = async (text: string, sourceLang?: string) => {
     if (!text) return;
@@ -157,7 +195,8 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
           timestamp: new Date(),
           sourceLang
         };
-        setTranslations(prev => [newTranslation, ...prev].slice(0, 10)); // Keep last 10 translations
+        setTranslations(prev => [newTranslation, ...prev].slice(0, 10));
+        speakTranslation(translated);
       }
     } catch (error) {
       toast({
@@ -214,17 +253,36 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-white">Live Translation</h3>
-            <Button
-              onClick={toggleListening}
-              variant="outline"
-              className={`bg-white/10 hover:bg-white/20 ${isListening ? 'text-red-400' : 'text-white'}`}
-            >
-              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Select
+                value={userLanguage}
+                onValueChange={setUserLanguage}
+              >
+                <SelectTrigger className="w-[180px] bg-white/10 border-white/20 text-white">
+                  <SelectValue placeholder="Select your language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_LANGUAGES.map((lang) => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={toggleListening}
+                variant="outline"
+                className={`bg-white/10 hover:bg-white/20 ${isListening ? 'text-red-400' : 'text-white'}`}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
           
           <div className="text-sm text-white/70">
-            {isListening ? "Translation mode active" : "Click microphone to start translation"}
+            {isListening 
+              ? `Translating non-${SUPPORTED_LANGUAGES.find(l => l.code === userLanguage)?.name} speech to ${SUPPORTED_LANGUAGES.find(l => l.code === userLanguage)?.name}`
+              : "Select your language and click microphone to start translation"}
           </div>
         </div>
 
