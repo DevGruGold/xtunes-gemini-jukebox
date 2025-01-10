@@ -6,12 +6,18 @@ import { useIsMobile } from "@/hooks/use-mobile";
 const RADIO_STATIONS = [
   {
     id: 1,
+    title: "Club Mix",
+    category: "Hip-Hop",
+    streamUrl: "https://strm112.1.fm/club_mobile_mp3",
+  },
+  {
+    id: 2,
     title: "Smooth Jazz",
     category: "Jazz",
     streamUrl: "https://strm112.1.fm/smoothjazz_mobile_mp3",
   },
   {
-    id: 2,
+    id: 3,
     title: "Classical Harmony",
     category: "Classical",
     streamUrl: "https://strm112.1.fm/classical_mobile_mp3",
@@ -35,19 +41,7 @@ const RADIO_STATIONS = [
     streamUrl: "https://strm112.1.fm/top40_mobile_mp3",
   },
   {
-    id: 9,
-    title: "Club Mix",
-    category: "Electronic",
-    streamUrl: "https://strm112.1.fm/club_mobile_mp3",
-  },
-  {
-    id: 10,
-    title: "2000s Hip-Hop",
-    category: "Hip-Hop",
-    streamUrl: "https://strm112.1.fm/urban_mobile_mp3",
-  },
-  {
-    id: 11,
+    id: 7,
     title: "New Country",
     category: "Country",
     streamUrl: "https://strm112.1.fm/country_mobile_mp3",

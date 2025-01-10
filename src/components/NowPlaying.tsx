@@ -19,41 +19,56 @@ interface Translation {
   timestamp: Date;
 }
 
+const getBackgroundStyle = (category: string): { backgroundImage: string, overlayColor: string } => {
+  const backgrounds = {
+    "Hip-Hop": {
+      image: "https://images.unsplash.com/photo-1527576539890-dfa815648363",
+      overlay: "from-purple-900/80 to-blue-900/80"
+    },
+    "Jazz": {
+      image: "https://images.unsplash.com/photo-1500673922987-e212871fec22",
+      overlay: "from-amber-900/80 to-red-900/80"
+    },
+    "Classical": {
+      image: "https://images.unsplash.com/photo-1487958449943-2429e8be8625",
+      overlay: "from-slate-900/80 to-zinc-900/80"
+    },
+    "Electronic": {
+      image: "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb",
+      overlay: "from-cyan-900/80 to-blue-900/80"
+    },
+    "Reggae": {
+      image: "https://images.unsplash.com/photo-1500375592092-40eb2168fd21",
+      overlay: "from-green-900/80 to-yellow-900/80"
+    },
+    "Pop": {
+      image: "https://images.unsplash.com/photo-1582562124811-c09040d0a901",
+      overlay: "from-pink-900/80 to-purple-900/80"
+    },
+    "Country": {
+      image: "https://images.unsplash.com/photo-1721322800607-8c38375eef04",
+      overlay: "from-amber-900/80 to-brown-900/80"
+    }
+  };
+
+  const defaultStyle = {
+    image: "https://images.unsplash.com/photo-1470813740244-df37b8c1edcb",
+    overlay: "from-slate-900/80 to-zinc-900/80"
+  };
+
+  const style = backgrounds[category] || defaultStyle;
+  return {
+    backgroundImage: `url(${style.image})`,
+    overlayColor: style.overlay
+  };
+};
+
 export const NowPlaying = ({ station }: NowPlayingProps) => {
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [currentLyrics, setCurrentLyrics] = useState<string>("");
   const [customText, setCustomText] = useState<string>("");
   const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchLyrics = async () => {
-      if (!station) return;
-      
-      try {
-        const genreLyrics: { [key: string]: string } = {
-          Jazz: "Smooth jazz playing softly\nMelodies floating through the air\nSaxophone whispers gently\nTaking away all my cares",
-          Classical: "Symphony in motion\nOrchestra plays tonight\nStrings and brass in harmony\nCreating pure delight",
-          Electronic: "Digital waves surround us\nSynthesizers set the mood\nElectronic beats pulsing\nTechnology and groove",
-          Reggae: "Island rhythms flowing\nSunset on the beach\nReggae music playing\nParadise within reach",
-          Pop: "Dancing to the rhythm\nCatchy melodies in my head\nPop music got me moving\nFollowing where the beat led",
-          "Hip-Hop": "Modern beats dropping\nTwo thousands flow is tight\nUrban sounds are popping\nKeeping it real tonight",
-          Country: "Guitar strings are strumming\nTales of love and life\nCountry music humming\nCutting like a knife",
-        };
-
-        const lyrics = genreLyrics[station.category] || "Music playing...";
-        setCurrentLyrics(lyrics);
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to fetch lyrics. Please try again later.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchLyrics();
-  }, [station, toast]);
+  const background = station ? getBackgroundStyle(station.category) : null;
 
   const handleTranslation = async (text: string) => {
     if (!text) return;
@@ -80,7 +95,6 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
     }
   };
 
-  const handleTranslateLyrics = () => handleTranslation(currentLyrics);
   const handleTranslateCustom = () => {
     handleTranslation(customText);
     setCustomText("");
@@ -89,31 +103,21 @@ export const NowPlaying = ({ station }: NowPlayingProps) => {
   if (!station) return null;
 
   return (
-    <Card className="backdrop-blur-sm bg-white/10 border-white/20 p-6 w-full max-w-2xl mx-auto">
-      <div className="space-y-4">
+    <Card 
+      className="relative overflow-hidden backdrop-blur-sm border-white/20 p-6 w-full max-w-2xl mx-auto"
+      style={{
+        backgroundImage: background?.backgroundImage,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}
+    >
+      <div className={`absolute inset-0 bg-gradient-to-br ${background?.overlayColor}`} />
+      <div className="relative z-10 space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-white">Now Playing</h2>
           <p className="text-white/70">{station.title}</p>
           <p className="text-sm text-white/50">{station.category}</p>
         </div>
-        
-        {currentLyrics && (
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-white">Lyrics</h3>
-              <Button
-                onClick={handleTranslateLyrics}
-                variant="outline"
-                className="bg-white/10 hover:bg-white/20"
-                disabled={isTranslating}
-              >
-                <Languages className="w-4 h-4 mr-2" />
-                {isTranslating ? "Translating..." : "Translate Lyrics"}
-              </Button>
-            </div>
-            <p className="text-white/70 whitespace-pre-line">{currentLyrics}</p>
-          </div>
-        )}
 
         <div className="space-y-2 mt-4">
           <h3 className="text-lg font-semibold text-white">Conversation</h3>
