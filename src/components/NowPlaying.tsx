@@ -1,8 +1,9 @@
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Languages, Mic, MicOff } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { translateText as translate } from "@/utils/ai";
+import { translateText as translate, identifySong } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import {
