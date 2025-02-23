@@ -94,6 +94,8 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
   const { toast } = useToast();
   const background = station ? getBackgroundStyle(station.category) : null;
   const originalVolume = useRef(audio?.volume || 1);
+  const [lastWarningTime, setLastWarningTime] = useState<number>(0);
+  const WARNING_COOLDOWN = 10000; // 10 seconds between warnings;
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
@@ -118,11 +120,54 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
     recognitionRef.current.onresult = async (event: any) => {
       const last = event.results.length - 1;
       const text = event.results[last][0].transcript;
+      const confidence = event.results[last][0].confidence;
+      const detectedLang = event.results[last][0].lang?.split('-')[0];
+      const userLang = userLanguage.split('-')[0];
       
-      if (event.results[last].isFinal) {
-        const detectedLang = event.results[last][0].lang;
-        if (detectedLang !== userLanguage && event.results[last][0].confidence > 0.5) {
-          handleTranslation(text, detectedLang);
+      if (event.results[last].isFinal && confidence > 0.5) {
+        const now = Date.now();
+        
+        if (detectedLang === userLang) {
+          // User is speaking their native language
+          if (now - lastWarningTime > WARNING_COOLDOWN) {
+            if (audio) {
+              audio.volume = 0.2;
+            }
+            toast({
+              title: "Voice Detected",
+              description: "The music has been lowered. Please keep your voice down to enjoy the music.",
+            });
+            setLastWarningTime(now);
+            
+            // Restore volume after 5 seconds
+            setTimeout(() => {
+              if (audio) {
+                audio.volume = originalVolume.current;
+              }
+            }, 5000);
+          }
+        } else {
+          // Foreign language detected
+          toast({
+            title: "Foreign Language Detected",
+            description: "Would you like to translate this conversation?",
+            action: (
+              <Button
+                onClick={() => {
+                  handleTranslation(text, detectedLang);
+                  if (!isListening) {
+                    toggleListening();
+                  }
+                }}
+                variant="outline"
+                size="sm"
+                className="bg-white/10 hover:bg-white/20 text-white"
+              >
+                Translate
+              </Button>
+            ),
+            duration: 5000,
+          });
         }
       }
     };
@@ -159,6 +204,16 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
         variant: "destructive",
       });
     };
+
+    try {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+        recognitionRef.current.start();
+      }).catch((error) => {
+        console.error('Microphone access denied:', error);
+      });
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error);
+    }
 
     return () => {
       if (recognitionRef.current) {
