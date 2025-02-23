@@ -96,6 +96,7 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
   const originalVolume = useRef(audio?.volume || 1);
   const [lastWarningTime, setLastWarningTime] = useState<number>(0);
   const WARNING_COOLDOWN = 10000; // 10 seconds between warnings;
+  const [songIdentification, setSongIdentification] = useState<string | null>(null);
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
@@ -252,6 +253,16 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
         };
         setTranslations(prev => [newTranslation, ...prev].slice(0, 10));
         speakTranslation(translated);
+        
+        // Try to identify the song when we get new lyrics
+        const songInfo = await identifySong(text);
+        if (songInfo) {
+          setSongIdentification(songInfo);
+          toast({
+            title: "Song Identified",
+            description: songInfo,
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -303,6 +314,11 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
           <h2 className="text-2xl font-bold text-white">Now Playing</h2>
           <p className="text-white/70">{station.title}</p>
           <p className="text-sm text-white/50">{station.category}</p>
+          {songIdentification && (
+            <p className="mt-2 text-sm text-white/90 bg-white/10 p-2 rounded">
+              🎵 {songIdentification}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

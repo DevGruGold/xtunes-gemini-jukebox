@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { RadioCard } from "@/components/RadioCard";
 import { NowPlaying } from "@/components/NowPlaying";
@@ -78,7 +79,13 @@ const Index = () => {
       <div className="container px-4 py-8 mx-auto">
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">XTunes Radio</h1>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+        {currentStation && (
+          <div className="mb-8">
+            <NowPlaying station={currentStation} audio={audio} />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {RADIO_STATIONS.map((station) => (
             <RadioCard
               key={station.id}
@@ -90,10 +97,6 @@ const Index = () => {
             />
           ))}
         </div>
-
-        {currentStation && (
-          <NowPlaying station={currentStation} audio={audio} />
-        )}
       </div>
     </div>
   );
