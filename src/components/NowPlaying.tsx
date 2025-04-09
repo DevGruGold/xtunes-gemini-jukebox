@@ -1,3 +1,4 @@
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Languages, Mic, MicOff } from "lucide-react";
@@ -107,7 +108,8 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
     setAutoTranslateEnabled(translationEnabled);
     if (translationEnabled) {
       if (!isListening) {
-        toggleListening();
+        // Don't automatically start listening - wait for user to click button
+        prepareRecognition();
       }
     } else if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
@@ -116,6 +118,15 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
   }, [translationEnabled]);
 
   useEffect(() => {
+    prepareRecognition();
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [userLanguage]);
+
+  const prepareRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast({
@@ -124,6 +135,10 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
         variant: "destructive",
       });
       return;
+    }
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
 
     recognitionRef.current = new SpeechRecognition();
@@ -202,7 +217,7 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
       if (audio) {
         audio.volume = originalVolume.current;
       }
-      if (autoTranslateEnabled) {
+      if (autoTranslateEnabled && isListening) {
         recognitionRef.current.start();
       } else {
         setIsListening(false);
@@ -218,13 +233,7 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
         variant: "destructive",
       });
     };
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    };
-  }, [userLanguage]);
+  };
 
   const speakTranslation = (text: string) => {
     if (!synthRef.current) return;
@@ -283,15 +292,26 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
 
     if (!isListening) {
       try {
+        // Show a toast to inform the user that we're requesting permission
+        toast({
+          title: "Microphone Access",
+          description: "Please allow microphone access in the browser prompt to use translation features.",
+        });
+        
+        // Request microphone permission explicitly
         await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Only start recognition after permission is granted
         recognitionRef.current.start();
         setAutoTranslateEnabled(true);
       } catch (error) {
+        console.error('Microphone access denied:', error);
         toast({
           title: "Microphone Access Denied",
           description: "Please allow microphone access to use translation.",
           variant: "destructive",
         });
+        setAutoTranslateEnabled(false);
       }
     } else {
       recognitionRef.current.stop();

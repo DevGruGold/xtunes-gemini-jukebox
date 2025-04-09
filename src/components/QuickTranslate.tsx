@@ -44,15 +44,18 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
   }, []);
 
   useEffect(() => {
+    // Only initialize speech recognition if the user has explicitly enabled it
     if (enabled) {
-      initializeSpeechRecognition();
+      // We'll prepare the recognition setup but not start it immediately
+      prepareRecognition();
     } else if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
     }
   }, [enabled, userLanguage]);
 
-  const initializeSpeechRecognition = () => {
+  // This function prepares the recognition but doesn't start it until permission is granted
+  const prepareRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast({
@@ -157,20 +160,36 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
         variant: "destructive",
       });
     };
+    
+    // Don't automatically start recognition - wait for user to request it
+    // This moves the permission prompt to a user-initiated action
+    startRecognition();
+  };
 
+  // Explicitly request microphone access when the user enables the feature
+  const startRecognition = async () => {
+    if (!recognitionRef.current) return;
+    
     try {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-        recognitionRef.current.start();
-      }).catch((error) => {
-        console.error('Microphone access denied:', error);
-        toast({
-          title: "Microphone Access Denied",
-          description: "Please allow microphone access to use translation.",
-          variant: "destructive",
-        });
+      // Show a toast to inform the user that we're requesting permission
+      toast({
+        title: "Microphone Access",
+        description: "Please allow microphone access in the browser prompt to use translation features.",
       });
+      
+      // Request microphone permission explicitly with a user-initiated action
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Only start recognition after permission is granted
+      recognitionRef.current.start();
     } catch (error) {
-      console.error('Failed to start speech recognition:', error);
+      console.error('Microphone access denied:', error);
+      onToggle(false); // Turn off the feature if permission is denied
+      toast({
+        title: "Microphone Access Denied",
+        description: "Translation feature has been disabled. Enable it again and allow microphone access to use translation.",
+        variant: "destructive",
+      });
     }
   };
 
