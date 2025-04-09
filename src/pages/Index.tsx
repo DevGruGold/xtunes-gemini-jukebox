@@ -65,7 +65,7 @@ const Index = () => {
     const hasSpeechRecognition = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     // Check for Web Audio API
     const hasWebAudio = typeof window.AudioContext !== 'undefined' || 
-                       typeof window.webkitAudioContext !== 'undefined';
+                       typeof (window as any).webkitAudioContext !== 'undefined';
     
     if (!hasSpeechRecognition || !hasWebAudio) {
       toast({

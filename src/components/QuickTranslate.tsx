@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Globe, Mic, MicOff, Users } from "lucide-react";
@@ -52,7 +51,7 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
     
     // Initialize audio context for voice analysis
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContext) {
         audioContextRef.current = new AudioContext();
         analyserRef.current = audioContextRef.current.createAnalyser();
