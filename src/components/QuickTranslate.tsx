@@ -142,7 +142,12 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
 
     recognitionRef.current.onend = () => {
       if (enabled) {
-        recognitionRef.current.start();
+        // Only restart if still enabled
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.error('Failed to restart recognition:', error);
+        }
       } else {
         setIsListening(false);
         if (audio) {
@@ -163,7 +168,9 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
     
     // Don't automatically start recognition - wait for user to request it
     // This moves the permission prompt to a user-initiated action
-    startRecognition();
+    if (enabled) {
+      startRecognition();
+    }
   };
 
   // Explicitly request microphone access when the user enables the feature
@@ -242,7 +249,17 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
   };
 
   const handleToggle = (checked: boolean) => {
-    onToggle(checked);
+    if (checked) {
+      // If turning on, we need to make sure this is a user gesture to request permissions
+      onToggle(checked);
+    } else {
+      // If turning off, just stop listening
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      onToggle(checked);
+    }
   };
 
   return (

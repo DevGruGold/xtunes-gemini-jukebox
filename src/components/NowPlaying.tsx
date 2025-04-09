@@ -99,6 +99,7 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
   const [lastWarningTime, setLastWarningTime] = useState<number>(0);
   const WARNING_COOLDOWN = 10000; // 10 seconds between warnings;
   const [songIdentification, setSongIdentification] = useState<string | null>(null);
+  const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
@@ -218,7 +219,12 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
         audio.volume = originalVolume.current;
       }
       if (autoTranslateEnabled && isListening) {
-        recognitionRef.current.start();
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.error('Failed to restart recognition:', error);
+          setIsListening(false);
+        }
       } else {
         setIsListening(false);
       }
@@ -227,6 +233,10 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
     recognitionRef.current.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
+      if (event.error === 'not-allowed') {
+        setHasMicPermission(false);
+        setAutoTranslateEnabled(false);
+      }
       toast({
         title: "Speech Recognition Error",
         description: event.error,
@@ -298,14 +308,16 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
           description: "Please allow microphone access in the browser prompt to use translation features.",
         });
         
-        // Request microphone permission explicitly
+        // Request microphone permission explicitly with a user-initiated action
         await navigator.mediaDevices.getUserMedia({ audio: true });
+        setHasMicPermission(true);
         
         // Only start recognition after permission is granted
         recognitionRef.current.start();
         setAutoTranslateEnabled(true);
       } catch (error) {
         console.error('Microphone access denied:', error);
+        setHasMicPermission(false);
         toast({
           title: "Microphone Access Denied",
           description: "Please allow microphone access to use translation.",
@@ -376,7 +388,9 @@ export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPl
           <div className="text-sm text-white/70">
             {isListening 
               ? `Translating non-${SUPPORTED_LANGUAGES.find(l => l.code === userLanguage)?.name} speech to ${SUPPORTED_LANGUAGES.find(l => l.code === userLanguage)?.name}`
-              : "Select your language and click microphone to start translation"}
+              : hasMicPermission === false
+                ? "Microphone access denied. Please allow access in your browser settings."
+                : "Select your language and click microphone to start translation"}
           </div>
         </div>
 
