@@ -3,6 +3,7 @@ import { useState } from "react";
 import { RadioCard } from "@/components/RadioCard";
 import { NowPlaying } from "@/components/NowPlaying";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { QuickTranslate } from "@/components/QuickTranslate";
 
 const RADIO_STATIONS = [
   {
@@ -54,6 +55,7 @@ const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audio] = useState(new Audio());
   const isMobile = useIsMobile();
+  const [translationEnabled, setTranslationEnabled] = useState(false);
 
   const handleTogglePlay = (station: typeof RADIO_STATIONS[0]) => {
     if (currentStation?.id === station.id) {
@@ -74,14 +76,29 @@ const Index = () => {
     }
   };
 
+  const handleToggleTranslation = (enabled: boolean) => {
+    setTranslationEnabled(enabled);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/90 to-secondary/90">
       <div className="container px-4 py-8 mx-auto">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">XTunes Radio</h1>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-white">XTunes Radio</h1>
+          <QuickTranslate 
+            audio={audio} 
+            onToggle={handleToggleTranslation}
+            enabled={translationEnabled}
+          />
+        </div>
         
         {currentStation && (
           <div className="mb-8">
-            <NowPlaying station={currentStation} audio={audio} />
+            <NowPlaying 
+              station={currentStation} 
+              audio={audio} 
+              translationEnabled={translationEnabled}
+            />
           </div>
         )}
 

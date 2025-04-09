@@ -1,9 +1,8 @@
-
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Languages, Mic, MicOff } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { translateText as translate, identifySong } from "@/utils/ai";
+import { translateText, identifySong } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -20,6 +19,7 @@ interface NowPlayingProps {
     category: string;
   };
   audio?: HTMLAudioElement;
+  translationEnabled?: boolean;
 }
 
 interface Translation {
@@ -84,7 +84,7 @@ const getBackgroundStyle = (category: string): { backgroundImage: string, overla
   };
 };
 
-export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
+export const NowPlaying = ({ station, audio, translationEnabled = false }: NowPlayingProps) => {
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -102,6 +102,18 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
   }, []);
+
+  useEffect(() => {
+    setAutoTranslateEnabled(translationEnabled);
+    if (translationEnabled) {
+      if (!isListening) {
+        toggleListening();
+      }
+    } else if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  }, [translationEnabled]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -207,16 +219,6 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
       });
     };
 
-    try {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-        recognitionRef.current.start();
-      }).catch((error) => {
-        console.error('Microphone access denied:', error);
-      });
-    } catch (error) {
-      console.error('Failed to start speech recognition:', error);
-    }
-
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -244,7 +246,7 @@ export const NowPlaying = ({ station, audio }: NowPlayingProps) => {
     
     setIsTranslating(true);
     try {
-      const translated = await translate(text);
+      const translated = await translateText(text);
       if (translated) {
         const newTranslation: Translation = {
           original: text,
