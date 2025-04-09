@@ -57,25 +57,66 @@ const Index = () => {
   const [audio] = useState(new Audio());
   const isMobile = useIsMobile();
   const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
   const { toast } = useToast();
 
-  // Check browser support for advanced features on mount
+  // Request microphone permission on mount
   useEffect(() => {
-    // Check for Speech Recognition
-    const hasSpeechRecognition = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-    // Check for Web Audio API
-    const hasWebAudio = typeof window.AudioContext !== 'undefined' || 
-                       typeof (window as any).webkitAudioContext !== 'undefined';
-    
-    if (!hasSpeechRecognition || !hasWebAudio) {
-      toast({
-        title: "Browser Compatibility Warning",
-        description: !hasSpeechRecognition 
-          ? "Your browser doesn't fully support speech recognition features." 
-          : "Your browser doesn't fully support advanced audio features.",
-        duration: 8000,
-      });
+    async function requestMicrophonePermission() {
+      try {
+        // Check for Speech Recognition
+        const hasSpeechRecognition = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        // Check for Web Audio API
+        const hasWebAudio = typeof window.AudioContext !== 'undefined' || 
+                           typeof (window as any).webkitAudioContext !== 'undefined';
+        
+        if (!hasSpeechRecognition || !hasWebAudio) {
+          toast({
+            title: "Browser Compatibility Warning",
+            description: !hasSpeechRecognition 
+              ? "Your browser doesn't fully support speech recognition features." 
+              : "Your browser doesn't fully support advanced audio features.",
+            duration: 8000,
+          });
+          return;
+        }
+
+        // Show toast to inform user we're requesting permission
+        toast({
+          title: "Microphone Access Required",
+          description: "XTunes needs microphone access to enable conversation translation features. Please allow access when prompted.",
+          duration: 5000,
+        });
+
+        // Request microphone permission
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // If we get here, permission was granted
+        setMicPermissionGranted(true);
+        
+        // Clean up the stream
+        stream.getTracks().forEach(track => track.stop());
+        
+        toast({
+          title: "Microphone Access Granted",
+          description: "You can now enable the translation features when needed.",
+          duration: 3000,
+        });
+      } catch (error) {
+        console.error("Microphone access denied:", error);
+        setMicPermissionGranted(false);
+        
+        toast({
+          title: "Microphone Access Denied",
+          description: "Translation features will be limited. You can enable access in browser settings and refresh the page.",
+          variant: "destructive",
+          duration: 8000,
+        });
+      }
     }
+
+    // Request permission on mount
+    requestMicrophonePermission();
   }, [toast]);
 
   const handleTogglePlay = (station: typeof RADIO_STATIONS[0]) => {
@@ -101,10 +142,30 @@ const Index = () => {
     setTranslationEnabled(enabled);
     
     if (enabled) {
-      toast({
-        title: "Translation Features Enabled",
-        description: "XTunes Translation Pro is now active. To use multi-participant mode for group conversations, click the multi-participant button.",
-      });
+      if (micPermissionGranted) {
+        toast({
+          title: "Translation Features Enabled",
+          description: "XTunes Translation Pro is now active. To use multi-participant mode for group conversations, click the multi-participant button.",
+        });
+      } else {
+        // If permission isn't granted yet, we'll try again
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(() => {
+            setMicPermissionGranted(true);
+            toast({
+              title: "Translation Features Enabled",
+              description: "XTunes Translation Pro is now active with microphone access granted.",
+            });
+          })
+          .catch(() => {
+            setTranslationEnabled(false);
+            toast({
+              title: "Microphone Access Required",
+              description: "Please allow microphone access in browser settings and try again.",
+              variant: "destructive",
+            });
+          });
+      }
     }
   };
 
@@ -117,6 +178,7 @@ const Index = () => {
             audio={audio} 
             onToggle={handleToggleTranslation}
             enabled={translationEnabled}
+            micPermissionGranted={micPermissionGranted}
           />
         </div>
         
@@ -126,6 +188,7 @@ const Index = () => {
               station={currentStation} 
               audio={audio} 
               translationEnabled={translationEnabled}
+              micPermissionGranted={micPermissionGranted}
             />
           </div>
         )}

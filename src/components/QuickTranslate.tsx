@@ -11,6 +11,7 @@ interface QuickTranslateProps {
   audio?: HTMLAudioElement;
   onToggle: (enabled: boolean) => void;
   enabled: boolean;
+  micPermissionGranted: boolean | null;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -28,7 +29,7 @@ const SUPPORTED_LANGUAGES = [
   { code: 'hi-IN', name: 'Hindi' },
 ];
 
-export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps) => {
+export const QuickTranslate = ({ audio, onToggle, enabled, micPermissionGranted }: QuickTranslateProps) => {
   const [isListening, setIsListening] = useState(false);
   const [userLanguage, setUserLanguage] = useState('en-US');
   const [multiParticipantMode, setMultiParticipantMode] = useState(false);
@@ -144,12 +145,16 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
 
     recognitionRef.current.onresult = async (event: SpeechRecognitionEvent) => {
       const last = event.results.length - 1;
-      const text = event.results[last][0].transcript;
-      const confidence = event.results[last][0].confidence;
-      const detectedLang = event.results[last]?.lang?.split('-')[0] || '';
+      const result = event.results[last];
+      const text = result[0].transcript;
+      const confidence = result[0].confidence;
+      
+      // Determine the detected language - this is a workaround since not all browsers
+      // provide the language information in the SpeechRecognitionResult
+      const detectedLang = userLanguage.split('-')[0]; // Default to user language
       const userLang = userLanguage.split('-')[0];
       
-      if (event.results[last].isFinal && confidence > 0.5) {
+      if (result.isFinal && confidence > 0.5) {
         const now = Date.now();
         
         // Analyze audio characteristics to detect different speakers
@@ -226,12 +231,12 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
             console.error('Song identification failed:', error);
           });
         }
-      } else if (!event.results[last].isFinal && confidence > 0.8 && multiParticipantMode) {
+      } else if (!result.isFinal && confidence > 0.8 && multiParticipantMode) {
         // For multi-participant mode, provide interim translations for longer sentences
         const interimText = text;
         const words = interimText.split(' ');
         
-        if (words.length > 5 && detectedLang !== userLang && detectedLang) {
+        if (words.length > 5) {
           // Only queue for translation if we have a meaningful segment
           const debounceDelay = translationDelay;
           clearTimeout(window.setTimeout(() => {}, 0)); // Clear any pending timeouts
@@ -280,42 +285,19 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
       });
     };
     
-    // Don't automatically start recognition - wait for user to request it
-    // This moves the permission prompt to a user-initiated action
-    if (enabled) {
-      startRecognition();
-    }
-  };
-
-  // Explicitly request microphone access when the user enables the feature
-  const startRecognition = async () => {
-    if (!recognitionRef.current) return;
-    
-    try {
-      // Show a toast to inform the user that we're requesting permission
-      toast({
-        title: "Microphone Access",
-        description: "Please allow microphone access in the browser prompt to use translation features.",
-      });
-      
-      // Request microphone permission explicitly with a user-initiated action
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Connect the stream to the audio context for voice analysis
-      if (audioContextRef.current && analyserRef.current) {
-        const source = audioContextRef.current.createMediaStreamSource(stream);
-        source.connect(analyserRef.current);
+    // Start recognition if permission is already granted
+    if (micPermissionGranted) {
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error('Failed to start recognition:', error);
       }
-      
-      // Only start recognition after permission is granted
-      recognitionRef.current.start();
-    } catch (error) {
-      console.error('Microphone access denied:', error);
-      onToggle(false); // Turn off the feature if permission is denied
+    } else {
+      // Don't start - wait for permission
       toast({
-        title: "Microphone Access Denied",
-        description: "Translation feature has been disabled. Enable it again and allow microphone access to use translation.",
-        variant: "destructive",
+        title: "Microphone Access Required",
+        description: "Please enable microphone access to use translation features.",
+        duration: 5000,
       });
     }
   };
@@ -363,16 +345,23 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
   };
 
   const handleToggle = (checked: boolean) => {
-    if (checked) {
-      // If turning on, we need to make sure this is a user gesture to request permissions
-      onToggle(checked);
-    } else {
-      // If turning off, just stop listening
+    onToggle(checked);
+    
+    if (checked && micPermissionGranted) {
+      // If permission is already granted, we can start immediately
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.error('Failed to start recognition:', error);
+        }
+      } else {
+        prepareRecognition();
       }
+    } else if (!checked && recognitionRef.current) {
+      // If turning off, just stop listening
+      recognitionRef.current.stop();
       setIsListening(false);
-      onToggle(checked);
     }
   };
 
@@ -434,6 +423,7 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
               size="sm" 
               className={`px-2 py-1 h-auto text-xs ${multiParticipantMode ? 'bg-white/20' : 'bg-transparent'}`}
               onClick={toggleMultiParticipantMode}
+              disabled={!micPermissionGranted}
             >
               <Users className="h-3.5 w-3.5 mr-1" />
               Multi-participant
@@ -452,6 +442,8 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
                 <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-ping"></span>
                 Active
               </span> : 
+              micPermissionGranted === false ? 
+              <span className="text-red-400">Permission denied</span> :
               "Disabled"}
           </div>
         </div>
