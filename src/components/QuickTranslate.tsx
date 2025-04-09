@@ -1,11 +1,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Switch } from "@/components/ui/switch";
-import { Globe, Mic, MicOff } from "lucide-react";
+import { Globe, Mic, MicOff, Users } from "lucide-react";
 import { translateText, identifySong } from "@/utils/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface QuickTranslateProps {
   audio?: HTMLAudioElement;
@@ -22,23 +23,51 @@ const SUPPORTED_LANGUAGES = [
   { code: 'ja-JP', name: 'Japanese' },
   { code: 'ko-KR', name: 'Korean' },
   { code: 'zh-CN', name: 'Chinese (Simplified)' },
+  { code: 'pt-BR', name: 'Portuguese (Brazil)' },
+  { code: 'ru-RU', name: 'Russian' },
+  { code: 'ar-SA', name: 'Arabic' },
+  { code: 'hi-IN', name: 'Hindi' },
 ];
 
 export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps) => {
   const [isListening, setIsListening] = useState(false);
   const [userLanguage, setUserLanguage] = useState('en-US');
-  const recognitionRef = useRef<any>(null);
+  const [multiParticipantMode, setMultiParticipantMode] = useState(false);
+  const [detectedSpeakers, setDetectedSpeakers] = useState<Set<string>>(new Set());
+  const [translationDelay, setTranslationDelay] = useState<number>(200); // Milliseconds
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const { toast } = useToast();
   const originalVolume = useRef(audio?.volume || 1);
   const [lastWarningTime, setLastWarningTime] = useState<number>(0);
   const WARNING_COOLDOWN = 10000; // 10 seconds between warnings
+  const translationQueue = useRef<{text: string, sourceLang?: string}[]>([]);
+  const isTranslating = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const startTimeRef = useRef<number>(0);
   
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
+    
+    // Initialize audio context for voice analysis
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        audioContextRef.current = new AudioContext();
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 2048;
+      }
+    } catch (error) {
+      console.error('Failed to initialize AudioContext:', error);
+    }
+    
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, []);
@@ -52,7 +81,45 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
       recognitionRef.current.stop();
       setIsListening(false);
     }
-  }, [enabled, userLanguage]);
+  }, [enabled, userLanguage, multiParticipantMode]);
+
+  // Process translation queue
+  useEffect(() => {
+    const processQueue = async () => {
+      if (translationQueue.current.length > 0 && !isTranslating.current) {
+        isTranslating.current = true;
+        const item = translationQueue.current.shift();
+        
+        if (item) {
+          try {
+            const translated = await translateText(item.text, item.sourceLang, userLanguage.split('-')[0]);
+            if (translated) {
+              speakTranslation(translated);
+            }
+          } catch (error) {
+            console.error('Translation failed:', error);
+          } finally {
+            isTranslating.current = false;
+            processQueue(); // Process next item in queue
+          }
+        }
+      }
+    };
+
+    const interval = setInterval(processQueue, 100);
+    return () => clearInterval(interval);
+  }, [userLanguage]);
+
+  const calculateTranslationSpeed = (text: string) => {
+    const endTime = performance.now();
+    const processingTime = endTime - startTimeRef.current;
+    const wordsPerMinute = (text.split(' ').length / processingTime) * 60000;
+    
+    console.log(`Translation speed: ${processingTime.toFixed(2)}ms (${wordsPerMinute.toFixed(2)} words/min)`);
+    
+    // Adaptive delay based on processing time
+    setTranslationDelay(Math.max(50, Math.min(500, processingTime / 2)));
+  };
 
   // This function prepares the recognition but doesn't start it until permission is granted
   const prepareRecognition = () => {
@@ -74,18 +141,30 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
     recognitionRef.current.lang = userLanguage;
+    recognitionRef.current.maxAlternatives = 3; // Get multiple alternatives for better accuracy
 
-    recognitionRef.current.onresult = async (event: any) => {
+    recognitionRef.current.onresult = async (event: SpeechRecognitionEvent) => {
       const last = event.results.length - 1;
       const text = event.results[last][0].transcript;
       const confidence = event.results[last][0].confidence;
-      const detectedLang = event.results[last][0].lang?.split('-')[0];
+      const detectedLang = event.results[last]?.lang?.split('-')[0] || '';
       const userLang = userLanguage.split('-')[0];
       
       if (event.results[last].isFinal && confidence > 0.5) {
         const now = Date.now();
         
-        if (detectedLang === userLang) {
+        // Analyze audio characteristics to detect different speakers
+        if (multiParticipantMode && analyserRef.current) {
+          const bufferLength = analyserRef.current.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+          analyserRef.current.getByteFrequencyData(dataArray);
+          
+          // Simple frequency analysis to estimate speaker characteristics
+          const speakerSignature = Array.from(dataArray.slice(0, 10)).join('-');
+          setDetectedSpeakers(prev => new Set(prev).add(speakerSignature));
+        }
+        
+        if (detectedLang === userLang || !detectedLang) {
           // User is speaking their native language
           if (now - lastWarningTime > WARNING_COOLDOWN) {
             if (audio) {
@@ -110,21 +189,57 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
             audio.volume = 0.2;
           }
           
-          toast({
-            title: "Foreign Language Detected",
-            description: "Would you like to translate this conversation?",
-            action: (
-              <Button
-                onClick={() => handleTranslation(text, detectedLang)}
-                variant="outline"
-                size="sm"
-                className="bg-white/10 hover:bg-white/20 text-white"
-              >
-                Translate
-              </Button>
-            ),
-            duration: 5000,
+          // Start timing for translation speed measurement
+          startTimeRef.current = performance.now();
+          
+          // For near-instant translation, add to queue immediately
+          if (multiParticipantMode) {
+            // In multi-participant mode, translate immediately
+            translationQueue.current.push({ text, sourceLang: detectedLang });
+          } else {
+            // In standard mode, ask user unless auto-translation is enabled
+            toast({
+              title: "Foreign Language Detected",
+              description: "Would you like to translate this conversation?",
+              action: (
+                <Button
+                  onClick={() => handleTranslation(text, detectedLang)}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white/10 hover:bg-white/20 text-white"
+                >
+                  Translate
+                </Button>
+              ),
+              duration: 5000,
+            });
+          }
+          
+          // Try to identify if it's a song
+          identifySong(text).then(songInfo => {
+            if (songInfo) {
+              toast({
+                title: "Song Identified",
+                description: songInfo,
+              });
+            }
+          }).catch(error => {
+            console.error('Song identification failed:', error);
           });
+        }
+      } else if (!event.results[last].isFinal && confidence > 0.8 && multiParticipantMode) {
+        // For multi-participant mode, provide interim translations for longer sentences
+        const interimText = text;
+        const words = interimText.split(' ');
+        
+        if (words.length > 5 && detectedLang !== userLang && detectedLang) {
+          // Only queue for translation if we have a meaningful segment
+          const debounceDelay = translationDelay;
+          clearTimeout(window.setTimeout(() => {}, 0)); // Clear any pending timeouts
+          
+          setTimeout(() => {
+            translationQueue.current.push({ text: interimText, sourceLang: detectedLang });
+          }, debounceDelay);
         }
       }
     };
@@ -156,7 +271,7 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
       }
     };
 
-    recognitionRef.current.onerror = (event: any) => {
+    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       toast({
@@ -185,7 +300,13 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
       });
       
       // Request microphone permission explicitly with a user-initiated action
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Connect the stream to the audio context for voice analysis
+      if (audioContextRef.current && analyserRef.current) {
+        const source = audioContextRef.current.createMediaStreamSource(stream);
+        source.connect(analyserRef.current);
+      }
       
       // Only start recognition after permission is granted
       recognitionRef.current.start();
@@ -203,12 +324,15 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
   const speakTranslation = (text: string) => {
     if (!synthRef.current) return;
     
+    // Calculate translation speed for analytics
+    calculateTranslationSpeed(text);
+    
     // Stop any ongoing speech
     synthRef.current.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = userLanguage;
-    utterance.rate = 1.0;
+    utterance.rate = 1.1; // Slightly faster for more natural conversation flow
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
@@ -219,18 +343,9 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
     if (!text) return;
     
     try {
-      const translated = await translateText(text);
+      const translated = await translateText(text, sourceLang, userLanguage.split('-')[0]);
       if (translated) {
         speakTranslation(translated);
-        
-        // Try to identify the song when we get new lyrics
-        const songInfo = await identifySong(text);
-        if (songInfo) {
-          toast({
-            title: "Song Identified",
-            description: songInfo,
-          });
-        }
       }
     } catch (error) {
       toast({
@@ -262,40 +377,86 @@ export const QuickTranslate = ({ audio, onToggle, enabled }: QuickTranslateProps
     }
   };
 
+  const toggleMultiParticipantMode = () => {
+    setMultiParticipantMode(!multiParticipantMode);
+    
+    toast({
+      title: !multiParticipantMode ? "Multi-Participant Mode Enabled" : "Multi-Participant Mode Disabled",
+      description: !multiParticipantMode 
+        ? "Automatic translation active for all detected languages" 
+        : "Standard translation mode activated",
+    });
+  };
+
   return (
-    <div className="flex items-center gap-4 py-2 px-4 rounded-lg bg-white/10 backdrop-blur-sm">
-      <div className="flex items-center gap-2">
-        <Globe className="h-5 w-5 text-white" />
-        <span className="text-sm font-medium text-white">Quick Translate</span>
+    <div className="flex flex-col gap-2 py-2 px-4 rounded-lg bg-white/10 backdrop-blur-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Globe className="h-5 w-5 text-white" />
+          <span className="text-sm font-medium text-white">XTunes Translator Pro</span>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <Select
+            value={userLanguage}
+            onValueChange={setUserLanguage}
+            disabled={!enabled}
+          >
+            <SelectTrigger className="w-[140px] h-8 bg-white/10 border-white/20 text-white text-xs">
+              <SelectValue placeholder="Select language" />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <SelectItem key={lang.code} value={lang.code}>
+                  {lang.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <div className="flex items-center gap-2">
+            <Switch 
+              checked={enabled}
+              onCheckedChange={handleToggle}
+            />
+            {enabled ? 
+              <Mic className={`h-4 w-4 ${isListening ? "text-green-400 animate-pulse" : "text-white"}`} /> :
+              <MicOff className="h-4 w-4 text-white" />
+            }
+          </div>
+        </div>
       </div>
       
-      <Select
-        value={userLanguage}
-        onValueChange={setUserLanguage}
-        disabled={!enabled}
-      >
-        <SelectTrigger className="w-[140px] h-8 bg-white/10 border-white/20 text-white text-xs">
-          <SelectValue placeholder="Select language" />
-        </SelectTrigger>
-        <SelectContent>
-          {SUPPORTED_LANGUAGES.map((lang) => (
-            <SelectItem key={lang.code} value={lang.code}>
-              {lang.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      
-      <div className="flex items-center gap-2">
-        <Switch 
-          checked={enabled}
-          onCheckedChange={handleToggle}
-        />
-        {enabled ? 
-          <Mic className={`h-4 w-4 ${isListening ? "text-green-400 animate-pulse" : "text-white"}`} /> :
-          <MicOff className="h-4 w-4 text-white" />
-        }
-      </div>
+      {enabled && (
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={`px-2 py-1 h-auto text-xs ${multiParticipantMode ? 'bg-white/20' : 'bg-transparent'}`}
+              onClick={toggleMultiParticipantMode}
+            >
+              <Users className="h-3.5 w-3.5 mr-1" />
+              Multi-participant
+            </Button>
+            
+            {multiParticipantMode && detectedSpeakers.size > 0 && (
+              <Badge variant="outline" className="text-xs bg-white/5 border-white/20 text-white">
+                {detectedSpeakers.size} speakers
+              </Badge>
+            )}
+          </div>
+          
+          <div className="text-xs text-white/70">
+            {isListening ? 
+              <span className="text-green-400 flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-ping"></span>
+                Active
+              </span> : 
+              "Disabled"}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,9 +1,10 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RadioCard } from "@/components/RadioCard";
 import { NowPlaying } from "@/components/NowPlaying";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QuickTranslate } from "@/components/QuickTranslate";
+import { useToast } from "@/hooks/use-toast";
 
 const RADIO_STATIONS = [
   {
@@ -56,6 +57,26 @@ const Index = () => {
   const [audio] = useState(new Audio());
   const isMobile = useIsMobile();
   const [translationEnabled, setTranslationEnabled] = useState(false);
+  const { toast } = useToast();
+
+  // Check browser support for advanced features on mount
+  useEffect(() => {
+    // Check for Speech Recognition
+    const hasSpeechRecognition = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    // Check for Web Audio API
+    const hasWebAudio = typeof window.AudioContext !== 'undefined' || 
+                       typeof window.webkitAudioContext !== 'undefined';
+    
+    if (!hasSpeechRecognition || !hasWebAudio) {
+      toast({
+        title: "Browser Compatibility Warning",
+        description: !hasSpeechRecognition 
+          ? "Your browser doesn't fully support speech recognition features." 
+          : "Your browser doesn't fully support advanced audio features.",
+        duration: 8000,
+      });
+    }
+  }, [toast]);
 
   const handleTogglePlay = (station: typeof RADIO_STATIONS[0]) => {
     if (currentStation?.id === station.id) {
@@ -78,6 +99,13 @@ const Index = () => {
 
   const handleToggleTranslation = (enabled: boolean) => {
     setTranslationEnabled(enabled);
+    
+    if (enabled) {
+      toast({
+        title: "Translation Features Enabled",
+        description: "XTunes Translation Pro is now active. To use multi-participant mode for group conversations, click the multi-participant button.",
+      });
+    }
   };
 
   return (
